@@ -4,6 +4,7 @@ import DateToolsSwift
 
 public protocol TimelineViewDelegate: class {
   func timelineView(_ timelineView: TimelineView, didLongPressAt hour: Int)
+  func timelineView(_ timelineView: TimelineView, didLongPressAt time: (hour: Int, minute: Int))
 }
 
 public class TimelineView: UIView, ReusableView {
@@ -41,7 +42,9 @@ public class TimelineView: UIView, ReusableView {
 
   var style = TimelineStyle()
 
-  var verticalDiff: CGFloat = 45
+  var verticalDiff: CGFloat {
+    return style.timeViewHeight
+  }
   var verticalInset: CGFloat = 10
   var leftInset: CGFloat = 53
 
@@ -101,15 +104,23 @@ public class TimelineView: UIView, ReusableView {
     addGestureRecognizer(longPressGestureRecognizer)
   }
   
-  @objc func longPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
-    if (gestureRecognizer.state == .began) {
-      // Get timeslot of gesture location
-      let pressedLocation = gestureRecognizer.location(in: self)
-      let percentOfHeight = (pressedLocation.y - verticalInset) / (bounds.height - (verticalInset * 2))
-      let pressedAtHour: Int = Int(24 * percentOfHeight)
-      delegate?.timelineView(self, didLongPressAt: pressedAtHour)
+    @objc func longPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
+        if (gestureRecognizer.state == .began) {
+            // Get timeslot of gesture location
+            let pressedLocation = gestureRecognizer.location(in: self)
+            let percentOfHeight = (pressedLocation.y - verticalInset) / (bounds.height - (verticalInset * 2))
+            
+            //Converts Hundredths of an Hour to Minutes
+            let wholeFractionOfHour = Double(24 * percentOfHeight) //The fraction of hour to be calculated
+            let intHour = Double(Int(wholeFractionOfHour)) //Extracts the Integer Part
+            let fractionOfHour = abs(wholeFractionOfHour - intHour) //Calculates only the fraction without integer part
+            let fractionOfHourRnd = round(fractionOfHour*100) / 100 //Rounds the fraction
+            let ruleOf3 = fractionOfHourRnd*59/0.98 //Calculates the minute from Fraction of Hour using a rule of 3. *http://www.aurorak12.org/hr/timecard/Conversion.pdf*
+            let minuteExtract = Int(ruleOf3) //Rounds the calculated minute
+            
+            delegate?.timelineView(self, didLongPressAt: (hour: Int(wholeFractionOfHour), minute: minuteExtract))
+        }
     }
-  }
 
   public func updateStyle(_ newStyle: TimelineStyle) {
     style = newStyle.copy() as! TimelineStyle
@@ -131,56 +142,117 @@ public class TimelineView: UIView, ReusableView {
     setNeedsDisplay()
   }
 
-  override public func draw(_ rect: CGRect) {
-    super.draw(rect)
-
-    var hourToRemoveIndex = -1
-
-    if isToday {
-      let minute = currentTime.minute
-      if minute > 39 {
-        hourToRemoveIndex = currentTime.hour + 1
-      } else if minute < 21 {
-        hourToRemoveIndex = currentTime.hour
-      }
-    }
-
-    let mutableParagraphStyle = NSParagraphStyle.default.mutableCopy() as! NSMutableParagraphStyle
-    mutableParagraphStyle.lineBreakMode = .byWordWrapping
-    mutableParagraphStyle.alignment = .right
-    let paragraphStyle = mutableParagraphStyle.copy() as! NSParagraphStyle
-    
-    let attributes = [NSAttributedStringKey.paragraphStyle: paragraphStyle,
-                      NSAttributedStringKey.foregroundColor: self.style.timeColor,
-                      NSAttributedStringKey.font: style.font] as [NSAttributedStringKey : Any]
-
-    for (i, time) in times.enumerated() {
-      let iFloat = CGFloat(i)
-      let context = UIGraphicsGetCurrentContext()
-      context!.interpolationQuality = .none
-      context?.saveGState()
-      context?.setStrokeColor(self.style.lineColor.cgColor)
-      context?.setLineWidth(onePixel)
-      context?.translateBy(x: 0, y: 0.5)
-      let x: CGFloat = 53
-      let y = verticalInset + iFloat * verticalDiff
-      context?.beginPath()
-      context?.move(to: CGPoint(x: x, y: y))
-      context?.addLine(to: CGPoint(x: (bounds).width, y: y))
-      context?.strokePath()
-      context?.restoreGState()
-
-      if i == hourToRemoveIndex { continue }
+    override public func draw(_ rect: CGRect) {
+        super.draw(rect)
         
-      let fontSize = style.font.pointSize
-      let timeRect = CGRect(x: 2, y: iFloat * verticalDiff + verticalInset - 7,
-                            width: leftInset - 8, height: fontSize + 2)
-
-      let timeString = NSString(string: time)
-
-      timeString.draw(in: timeRect, withAttributes: attributes)
+        var hourToRemoveIndex = -1
+    
+        if isToday {
+            let minute = currentTime.component(.minute)
+            hourToRemoveIndex = currentTime.component(.hour)
+            
+            if minute > 39 {
+                hourToRemoveIndex += 1
+            }
+        }
+        
+        let mutableParagraphStyle = NSParagraphStyle.default.mutableCopy() as! NSMutableParagraphStyle
+        mutableParagraphStyle.lineBreakMode = .byWordWrapping
+        mutableParagraphStyle.alignment = .right
+        let paragraphStyle = mutableParagraphStyle.copy() as! NSParagraphStyle
+        
+        let attributes = [NSAttributedStringKey.paragraphStyle: paragraphStyle,
+                          NSAttributedStringKey.foregroundColor: self.style.timeColor,
+                          NSAttributedStringKey.font: style.font] as [NSAttributedStringKey : Any]
+        
+        for (i, time) in times.enumerated() {
+            let iFloat = CGFloat(i)
+            let context = UIGraphicsGetCurrentContext()
+            context!.interpolationQuality = .none
+            context?.saveGState()
+            context?.setStrokeColor(self.style.lineColor.cgColor)
+            context?.setLineWidth(onePixel)
+            context?.translateBy(x: 0, y: 0.5)
+            let x: CGFloat = 53
+            let y = verticalInset + iFloat * verticalDiff
+            context?.beginPath()
+            context?.move(to: CGPoint(x: x, y: y))
+            context?.addLine(to: CGPoint(x: (bounds).width, y: y))
+            context?.strokePath()
+            context?.restoreGState()
+            
+            //Hide time label if current time line overlaps it
+            var removeHour = false
+            var remove30Min = false
+            var remove15Min = false
+            var remove45Min = false
+            if i == hourToRemoveIndex {
+                let minute = currentTime.component(.minute)
+                switch minute {
+                case 0...5, 55...60:
+                    removeHour = true
+                    break
+                case 10...20:
+                    remove15Min = true
+                    break
+                case 25...35:
+                    remove30Min = true
+                    break
+                case 40...50:
+                    remove45Min = true
+                    break
+                default:
+                    break
+                }
+            }
+            
+            let fontSize = style.font.pointSize
+            
+            // line to be added for 30 min interval
+            let subLineContext = UIGraphicsGetCurrentContext()
+            subLineContext!.interpolationQuality = .none
+            subLineContext?.saveGState()
+            subLineContext?.setStrokeColor(UIColor.clear.cgColor)
+            subLineContext?.setLineWidth(1)
+            subLineContext?.translateBy(x: 0, y: 0)
+            let halfHourX: CGFloat = 53
+            let halfHourY = (verticalInset + iFloat * verticalDiff) + (verticalDiff/2)
+            subLineContext?.beginPath()
+            subLineContext?.move(to: CGPoint(x: halfHourX, y: halfHourY))
+            subLineContext?.addLine(to: CGPoint(x: (bounds).width, y: halfHourY))
+            subLineContext?.strokePath()
+            
+            if !removeHour {
+                let timeRect = CGRect(x: 2, y: iFloat * verticalDiff + verticalInset - 7,
+                                      width: leftInset - 8, height: fontSize + 2)
+                let timeString = NSString(string: time)
+                timeString.draw(in: timeRect, withAttributes: attributes)
+            }
+            
+            if !remove30Min {
+                //add half hour time string
+                let halfHourTimeRect = CGRect(x: 2, y: (iFloat * verticalDiff + verticalInset - 7) + (verticalDiff/2),
+                                              width: leftInset - 8, height: fontSize + 2)
+                let halfHourTimeString = NSString(string: "30")
+                halfHourTimeString.draw(in: halfHourTimeRect, withAttributes: attributes)
+            }
+            
+            if !remove15Min {
+                let min15TimeRect = CGRect(x: 2, y: (iFloat * verticalDiff + verticalInset - 7) + (verticalDiff/4),
+                                           width: leftInset - 8, height: fontSize + 2)
+                let min15TimeString = NSString(string: "15")
+                min15TimeString.draw(in: min15TimeRect, withAttributes: attributes)
+            }
+            
+            if !remove45Min {
+                let min45TimeRect = CGRect(x: 2,
+                                           y: (iFloat * verticalDiff + verticalInset - 7) + (verticalDiff/2) + (verticalDiff/4),
+                                           width: leftInset - 8, height: fontSize + 2)
+                let min45TimeString = NSString(string: "45")
+                min45TimeString.draw(in: min45TimeRect, withAttributes: attributes)
+            }
+        }
     }
-  }
 
   override public func layoutSubviews() {
     super.layoutSubviews()

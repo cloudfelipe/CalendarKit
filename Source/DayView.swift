@@ -8,6 +8,7 @@ public protocol DayViewDelegate: class {
   func dayViewDidLongPressTimelineAtHour(_ hour: Int)
   func dayView(dayView: DayView, willMoveTo date: Date)
   func dayView(dayView: DayView, didMoveTo  date: Date)
+  func dayViewDidLongPressTimelineAtHour(_ time: (hour: Int, minute: Int))
 }
 
 public class DayView: UIView {
@@ -145,10 +146,16 @@ extension DayView: TimelinePagerViewDelegate {
   public func timelinePager(timelinePager: TimelinePagerView, didMoveTo  date: Date) {
     delegate?.dayView(dayView: self, didMoveTo: date)
   }
+  public func timelinePagerDidLongPressTimelineAtHour(_ time: (hour: Int, minute: Int)) {
+    delegate?.dayViewDidLongPressTimelineAtHour(time)
+  }
 }
 
 extension DayView: TimelineViewDelegate {
   public func timelineView(_ timelineView: TimelineView, didLongPressAt hour: Int) {
     delegate?.dayViewDidLongPressTimelineAtHour(hour)
+  }
+  public func timelineView(_ timelineView: TimelineView, didLongPressAt time: (hour: Int, minute: Int)) {
+    delegate?.dayViewDidLongPressTimelineAtHour(time)
   }
 }

@@ -63,4 +63,7 @@ open class DayViewController: UIViewController, EventDataSource, DayViewDelegate
 
   open func dayView(dayView: DayView, didMoveTo date: Date) {
   }
+  
+  open func dayViewDidLongPressTimelineAtHour(_ time: (hour: Int, minutes: Int)) {
+  }
 }
