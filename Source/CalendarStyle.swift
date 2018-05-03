@@ -103,7 +103,7 @@ public class TimelineStyle: NSCopying {
   public var backgroundColor = UIColor.white
   public var font = UIFont.boldSystemFont(ofSize: 11)
   public var dateStyle : DateStyle = .system
-  public var timeViewHeight: CGFloat = 45.0
+  public var timeViewHeight: CGFloat = 110.0
   public init() {}
   public func copy(with zone: NSZone? = nil) -> Any {
     let copy = TimelineStyle()
