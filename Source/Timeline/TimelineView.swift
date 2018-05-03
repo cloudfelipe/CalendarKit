@@ -151,7 +151,7 @@ public class TimelineView: UIView, ReusableView {
             let minute = currentTime.component(.minute)
             hourToRemoveIndex = currentTime.component(.hour)
             
-            if minute > 39 {
+            if minute > 55 {
                 hourToRemoveIndex += 1
             }
         }
